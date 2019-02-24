@@ -188,9 +188,9 @@ class FullyConnectedNet(object):
           self.params['W' + str(i + 1)] = np.random.randn(list_of_dimensions[i], list_of_dimensions[i + 1]) * weight_scale
           self.params['b' + str(i + 1)] = np.zeros(list_of_dimensions[i + 1])
         if self.normalization == 'batchnorm':
-          for i in range(len(list_of_dimensions) - 1):
-            self.params['gamma' + str(i + 1)] = np.ones(list_of_dimensions[i + 1])
-            self.params['beta' + str(i + 1)] = np.zeros(list_of_dimensions[i + 1])
+          for i in range(1, len(hidden_dims) + 1):
+            self.params['gamma' + str(i)] = np.ones(hidden_dims[i - 1])
+            self.params['beta' + str(i)] = np.zeros(hidden_dims[i - 1])
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -257,7 +257,7 @@ class FullyConnectedNet(object):
             outputs['hidden_layer' + str(i + 1)], outputs['cache_hidden_layer' + str(i + 1)] =\
               affine_relu_forward(layer_input, self.params['W' + str(i + 1)], self.params['b' + str(i + 1)])
             layer_input = outputs['hidden_layer' + str(i + 1)]
-          # with batchnormalization
+        # with batchnormalization
         if self.normalization == 'batchnorm':
           for i in range(self.num_layers - 1):
             outputs['hidden_layer' + str(i + 1)], outputs['cache_hidden_layer' + str(i + 1)] =\
@@ -300,18 +300,17 @@ class FullyConnectedNet(object):
         grads['W' + str(self.num_layers)] += self.reg * self.params['W' + str(self.num_layers)]
 
         d_layer = grads['dscores']
-        if self.normalization == 'None':
+        if self.normalization == None:
           for i in range(self.num_layers - 1, 0, -1):
             cache_hidden_layer = outputs['cache_hidden_layer' + str(i)]
-            grads['d_hidden_layer' + str(i)], grads['W' + str(i)],\
-            grads['b' + str(i)] = affine_relu_backward(d_layer, cache_hidden_layer)
+            grads['d_hidden_layer' + str(i)], grads['W' + str(i)], grads['b' + str(i)] = affine_relu_backward(d_layer, cache_hidden_layer)
             grads['W' + str(i)] += self.reg * self.params['W' + str(i)]
             d_layer = grads['d_hidden_layer' + str(i)]
+
         if self.normalization == 'batchnorm':
           for i in range(self.num_layers - 1, 0, -1):
             cache_hidden_layer = outputs['cache_hidden_layer' + str(i)]
-            grads['d_hidden_layer' + str(i)], grads['W' + str(i)], grads['b' + str(i)], grads['gamma' + str(i)],\ 
-            grads['beta' + str(i)] = affine_batch_relu_backward(d_layer, cache_hidden_layer)
+            grads['d_hidden_layer' + str(i)], grads['W' + str(i)], grads['b' + str(i)], grads['gamma' + str(i)], grads['beta' + str(i)] = affine_batch_relu_backward(d_layer, cache_hidden_layer)
             grads['W' + str(i)] += self.reg * self.params['W' + str(i)]
             d_layer = grads['d_hidden_layer' + str(i)]
 
