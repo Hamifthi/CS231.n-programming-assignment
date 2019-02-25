@@ -330,16 +330,14 @@ def layernorm_forward(x, gamma, beta, ln_param):
     # transformations you could perform, that would enable you to copy over   #
     # the batch norm code and leave it almost unchanged?                      #
     ###########################################################################
-    x_transpose = x.T
-    mean = np.mean(x_transpose, axis = 0)
-    variance = np.var(x_transpose, axis = 0)
+    mean = np.mean(x, axis = 1).reshape(x.shape[0], 1)
+    variance = np.var(x, axis = 1).reshape(x.shape[0], 1)
     sqrt_variance = np.sqrt(variance + eps)
     inv_sqrt_variance = 1 / sqrt_variance
-    normalized_x_transpose = (x_transpose - mean) / np.sqrt(variance + eps)
-    mu = (normalized_x_transpose * sqrt_variance)
-    normalized_x = normalized_x_transpose.T
+    normalized_x = (x - mean) / np.sqrt(variance + eps)
+    mu = (normalized_x * sqrt_variance)
     out = gamma * normalized_x + beta
-    cache = [normalized_x, variance, inv_sqrt_variance, gamma, mu]
+    cache = [normalized_x, variance + eps, inv_sqrt_variance, gamma, mu]
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -375,12 +373,10 @@ def layernorm_backward(dout, cache):
     dgamma = np.sum(dout * normalized_x, axis = 0)
     dbeta = np.sum(dout, axis = 0)
     dx_normailized = dout * gamma
-    dx_normailized_transpose = dx_normailized.T
-    d_variance = np.sum(dx_normailized_transpose * mu, axis = 0) * -0.5 * (variance) ** (-3 / 2)
-    d_mean = np.sum(dx_normailized_transpose * (-1 * inv_sqrt_variance), axis = 0) +\
-       d_variance / D * np.sum(2 * mu, axis = 0)
-    dx = dx_normailized_transpose * (inv_sqrt_variance) + d_mean / D + d_variance * 2 / D * mu
-    dx = dx.T
+    d_variance = np.sum(dx_normailized * mu, axis = 1).reshape(dx_normailized.shape[0], 1) * -0.5 * (variance) ** (-3 / 2)
+    d_mean = np.sum(dx_normailized * (-1 * inv_sqrt_variance), axis = 1).reshape(dx_normailized.shape[0], 1) +\
+       d_variance / D * np.sum(2 * mu, axis = 1).reshape(dx_normailized.shape[0], 1)
+    dx = dx_normailized * (inv_sqrt_variance) + d_mean / D + d_variance * 2 / D * mu
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
