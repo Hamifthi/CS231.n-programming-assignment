@@ -495,11 +495,39 @@ def conv_forward_naive(x, w, b, conv_param):
     - cache: (x, w, b, conv_param)
     """
     out = None
+    stride, pad = conv_param['stride'], conv_param['pad']
+    N, C, H, W = x.shape
+    F, C, HH, WW = w.shape
     ###########################################################################
     # TODO: Implement the convolutional forward pass.                         #
     # Hint: you can use the function np.pad for padding.                      #
     ###########################################################################
-    pass
+    # first we doing zero padding
+    if pad > 0:
+      x_prime = np.zeros(shape = (N, C, H + 2 * pad, W + 2 * pad))
+      for pic in range(N):
+        for channel in range(C):
+          for row in range(1, len(x[pic, channel, :]) + 1):
+            x_prime[pic, channel, row] = np.concatenate([np.zeros(shape = pad),
+             x[pic, channel, row - 1], np.zeros(shape = pad)])
+
+    # now we can do convolutions calculations
+    H_prime = int(1 + (H + 2 * pad - HH) / stride)
+    W_prime = int(1 + (W + 2 * pad - WW) / stride)
+    out = np.zeros(shape = (N, F, H_prime, W_prime))
+    row_start, row_end = 0, HH
+    column_start, column_end = 0, WW
+    for pic in range(N):
+      for kernel in range(F):
+        for row in range(H_prime):
+          for column in range(W_prime):
+            out[pic, kernel, row, column] = np.sum(x_prime[pic, :, row_start: row_end, column_start: column_end] * w[kernel]) + b[kernel]
+            column_start += stride
+            column_end += stride
+          column_start, column_end = 0, WW
+          row_start += stride
+          row_end += stride
+        row_start, row_end = 0, HH
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
