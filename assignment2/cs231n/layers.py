@@ -510,6 +510,8 @@ def conv_forward_naive(x, w, b, conv_param):
           for row in range(1, len(x[pic, channel, :]) + 1):
             x_prime[pic, channel, row] = np.concatenate([np.zeros(shape = pad),
              x[pic, channel, row - 1], np.zeros(shape = pad)])
+    else:
+      x_prime = x
 
     # now we can do convolutions calculations
     H_prime = int(1 + (H + 2 * pad - HH) / stride)
@@ -531,7 +533,7 @@ def conv_forward_naive(x, w, b, conv_param):
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
-    cache = (x, w, b, conv_param)
+    cache = (x, x_prime, w, b, conv_param)
     return out, cache
 
 
@@ -549,10 +551,49 @@ def conv_backward_naive(dout, cache):
     - db: Gradient with respect to b
     """
     dx, dw, db = None, None, None
+    x, x_prime, w, b, conv_param = cache
+    stride, pad = conv_param['stride'], conv_param['pad']
+    N, C, H, W = x.shape
+    F, C, HH, WW = w.shape
     ###########################################################################
     # TODO: Implement the convolutional backward pass.                        #
     ###########################################################################
-    pass
+    # first calculate gradient with respect to x
+    dx_prime = np.zeros(shape = x_prime.shape)
+    row_start, row_end = 0, HH
+    column_start, column_end = 0, WW
+    for pic in range(N):
+      for kernel in range(F):
+        for row in range(H):
+          for column in range(W):
+            dx_prime[pic, :, row_start: row_end, column_start: column_end] += w[kernel] * dout[pic, kernel, row, column]
+            column_start += stride
+            column_end += stride
+          column_start, column_end = 0, WW
+          row_start += stride
+          row_end += stride
+        row_start, row_end = 0, HH
+    dx = dx_prime[:, :, pad: pad + H, pad: pad + W]
+
+    # second we calculate gradient with respect to w
+    dw = np.zeros(shape = w.shape)
+    row_start, row_end = 0, H
+    column_start, column_end = 0, W
+    for kernel in range(F):
+      for channel in range(C):
+        for row in range(HH):
+          for column in range(WW):
+            dw[kernel, channel, row, column] = np.sum(x_prime[:, channel, row_start: row_end, column_start: column_end] * dout[:, kernel])
+            column_start += stride
+            column_end += stride
+          column_start, column_end = 0, W
+          row_start += stride
+          row_end += stride
+        row_start, row_end = 0, H
+    
+    db = np.zeros(shape = b.shape)
+    for kernel in range(F):
+      db[kernel] = np.sum(dout[:, kernel])
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
