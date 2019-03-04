@@ -808,18 +808,46 @@ def spatial_groupnorm_forward(x, gamma, beta, G, gn_param):
     # and layer normalization!                                                # 
     ###########################################################################
     # Reshape x to N*H*W * C to call batch normalization
-    x_new = np.reshape(np.transpose(x, (0, 2, 3, 1)), (N, -1, C))
-    number_of_groups = int(C / G)
+    # my implementation that partially is correct
 
-    for pic in range(N):
-      for i in range(number_of_groups):
-        out, cache = layernorm_forward(x_new[pic, :, G * i: G * i + G], gamma[G * i: G * i + G], beta[G * i: G * i + G], gn_param)
-        groups_out.append(out)
-        groups_cache.append(cache)
+    # x_new = np.reshape(np.transpose(x, (0, 2, 3, 1)), (N, -1, C))
+    # number_of_groups = int(C / G)
+
+    # for pic in range(N):
+    #   for i in range(number_of_groups):
+    #     out, cache = layernorm_forward(x_new[pic, :, G * i: G * i + G], gamma[G * i: G * i + G], beta[G * i: G * i + G], gn_param)
+    #     groups_out.append(out)
+    #     groups_cache.append(cache)
     
-    out = np.concatenate(groups_out, axis = 1)
-    # Reshape out to (N, C, H, W)
-    out = np.reshape(out, (N, C, H, W))
+    # out = np.concatenate(groups_out, axis = 1)
+    # # Reshape out to (N, C, H, W)
+    # out = np.reshape(out, (N, C, H, W))
+    # cache = np.array(groups_cache)
+
+    # another implementation
+
+    x = np.reshape(x, (N*G, C//G*H*W))
+    
+    # Transpose x to use batchnorm code
+    x = x.T
+
+    # Just copy from batch normalization code
+    mu = np.mean(x, axis=0)
+    
+    xmu = x - mu
+    sq = xmu ** 2
+    var = np.var(x, axis=0)
+
+    sqrtvar = np.sqrt(var + eps)
+    ivar = 1./sqrtvar
+    xhat = xmu * ivar
+    
+    # Transform xhat and reshape
+    xhat = np.reshape(xhat.T, (N, C, H, W))
+    out = gamma[np.newaxis, :, np.newaxis, np.newaxis] * xhat + beta[np.newaxis, :, np.newaxis, np.newaxis]
+
+    cache = (xhat, gamma, xmu, ivar, sqrtvar, var, eps, G)
+
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -840,12 +868,49 @@ def spatial_groupnorm_backward(dout, cache):
     - dbeta: Gradient with respect to shift parameter, of shape (C,)
     """
     dx, dgamma, dbeta = None, None, None
-
+    # N, C, H, W = dout.shape
+    # G = int(C / (cache.shape[0] / N))
+    # groups_dx, groups_dgamma, groups_dbeta = [], [], []
     ###########################################################################
     # TODO: Implement the backward pass for spatial group normalization.      #
     # This will be extremely similar to the layer norm implementation.        #
     ###########################################################################
-    pass
+    # dout_new = np.reshape(np.transpose(dout, (0, 2, 3, 1)), (N, -1, C))
+    # number_of_groups = int(C / G)
+
+    # for pic in range(N):
+    #   for i in range(number_of_groups):
+    #     dx, dgamma, dbeta = layernorm_backward(dout_new[pic, :, G * i: G * i + G], cache[pic * number_of_groups + i])
+    #     groups_dx.append(dx)
+    #     groups_dgamma.append(dgamma)
+    #     groups_dbeta.append(dbeta)
+    
+    # # groups_dx = np.concatenate(groups_dx, axis = 1)
+    # # dx = np.transpose(np.reshape(groups_dx, (H, W, N, C)), (2, 3, 0, 1))
+    # dx = np.array(groups_dx).reshape(N, number_of_groups, H * W, G)
+    # dx = np.concatenate(dx)
+    # dx = np.concatenate(dx)
+    # dx = dx.T.reshape(N, C, H, W)
+
+    N, C, H, W = dout.shape
+
+    xhat, gamma, xmu, ivar, sqrtvar, var, eps, G = cache
+
+    dxhat = dout * gamma[np.newaxis, :, np.newaxis, np.newaxis]
+
+    # Set keepdims=True to make dbeta and dgamma's shape be (1, C, 1, 1)
+    dbeta = np.sum(dout, axis=(0, 2, 3), keepdims=True)
+    dgamma = np.sum(dout * xhat, axis=(0, 2, 3), keepdims=True)
+
+    # Reshape and transpose back
+    dxhat = np.reshape(dxhat, (N*G, C//G*H*W)).T
+    xhat = np.reshape(xhat, (N*G, C//G*H*W)).T
+
+    Nprime, Dprime = dxhat.shape
+    
+    dx = 1.0/Nprime * ivar * (Nprime*dxhat - np.sum(dxhat, axis=0) - xhat*np.sum(dxhat*xhat, axis=0))
+
+    dx = np.reshape(dx.T, (N, C, H, W))
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
