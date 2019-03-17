@@ -145,7 +145,10 @@ class CaptioningRNN(object):
         # step 2
         word_vectors, word_vectors_cache = word_embedding_forward(captions_in, W_embed)
         # step 3
-        hidden_states, hidden_cache = rnn_forward(word_vectors, initial_hidden_state, Wx, Wh, b)
+        if self.cell_type == 'rnn':
+            hidden_states, hidden_cache = rnn_forward(word_vectors, initial_hidden_state, Wx, Wh, b)
+        else:
+            hidden_states, hidden_cache = lstm_forward(word_vectors, initial_hidden_state, Wx, Wh, b)
         # step 4
         scores, scores_cache = temporal_affine_forward(hidden_states, W_vocab, b_vocab)
         # step 5
@@ -153,7 +156,10 @@ class CaptioningRNN(object):
 
         grads['hidden_states'], grads['W_vocab'], grads['b_vocab'] = temporal_affine_backward(grads['scores'], scores_cache)
 
-        grads['word_vectors'], grads['initial_hidden_state'], grads['Wx'], grads['Wh'], grads['b'] = rnn_backward(grads['hidden_states'], hidden_cache)
+        if self.cell_type == 'rnn':
+            grads['word_vectors'], grads['initial_hidden_state'], grads['Wx'], grads['Wh'], grads['b'] = rnn_backward(grads['hidden_states'], hidden_cache)
+        else:
+            grads['word_vectors'], grads['initial_hidden_state'], grads['Wx'], grads['Wh'], grads['b'] = lstm_backward(grads['hidden_states'], hidden_cache)
 
         grads['W_embed'] = word_embedding_backward(grads['word_vectors'], word_vectors_cache)
 
@@ -224,45 +230,30 @@ class CaptioningRNN(object):
         # you are using an LSTM, initialize the first cell state to zeros.        #
         ###########################################################################
         initial_hidden_state = affine_forward(features, W_proj, b_proj)[0]
-        embeded_word = word_embedding_forward(self._start, W_embed)[0]
-        next_hidden_state = rnn_step_forward(embeded_word, initial_hidden_state, Wx, Wh, b)[0]
+        embeded_word = word_embedding_forward(self._start, W_embed)[0].reshape(1, -1)
+        
+        if self.cell_type == 'rnn':
+            next_hidden_state = rnn_step_forward(embeded_word, initial_hidden_state, Wx, Wh, b)[0]
+        else:
+            initial_cell_state = np.zeros_like(initial_hidden_state)
+            next_hidden_state, next_cell_state, _ = lstm_step_forward(embeded_word, initial_hidden_state, initial_cell_state, Wx, Wh, b)
+
         previous_hidden_state = next_hidden_state
         next_hidden_state = np.expand_dims(next_hidden_state, axis = 1)
         scores = temporal_affine_forward(next_hidden_state, W_vocab, b_vocab)[0]
         captions[:, 0] = np.ravel(np.argmax(scores, axis = 2))
+
         for t in range(1, max_length):
           embeded_word = word_embedding_forward(captions[:, t - 1], W_embed)[0]
-          next_hidden_state = rnn_step_forward(embeded_word, previous_hidden_state, Wx, Wh, b)[0]
+          if self.cell_type == 'rnn':
+              next_hidden_state = rnn_step_forward(embeded_word, previous_hidden_state, Wx, Wh, b)[0]
+          else:
+              next_hidden_state, next_cell_state, _ = lstm_step_forward(embeded_word, previous_hidden_state, next_cell_state, Wx, Wh, b)
+
           previous_hidden_state = next_hidden_state
           next_hidden_state = np.expand_dims(next_hidden_state, axis = 1)
           scores = temporal_affine_forward(next_hidden_state, W_vocab, b_vocab)[0]
           captions[:, t] = np.ravel(np.argmax(scores, axis = 2))
-
-        # hidden_init, _ = affine_forward(features, W_proj, b_proj)
-
-        # (1) Embedding the <START> token
-        # start_word_embed, _ = word_embedding_forward(self._start, W_embed)
-
-        # hidden_curr = hidden_init
-        # cell_curr = np.zeros_like(hidden_curr)
-
-        # word_embed = start_word_embed
-
-        # for step in range(max_length):
-        #     # (2)
-        #     if self.cell_type == 'rnn':
-        #         hidden_curr, _ = rnn_step_forward(word_embed, hidden_curr, Wx, Wh, b)
-        #     else:
-        #         hidden_curr, cell_curr, _ = lstm_step_forward(word_embed, hidden_curr, cell_curr, Wx, Wh, b)
-
-        #     # (3)
-        #     step_scores, _ = affine_forward(hidden_curr, W_vocab, b_vocab)
-
-        #     # (4)
-        #     captions[:, step] = np.argmax(step_scores, axis=1)
-
-        #     # Embedding the output word for the next iteration
-        #     word_embed, _ = word_embedding_forward(captions[:, step], W_embed)
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
